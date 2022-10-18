@@ -9,7 +9,7 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
-
+#include "log.h"
 #define TID_INCREMENT               4
 
 #define THREAD_TIME_SLICE           1
@@ -169,7 +169,7 @@ ThreadSystemInitMainForCurrentCPU(
 
     snprintf( mainThreadName, MAX_PATH, "%s-%02x", "main", pCpu->ApicId );
 
-    status = _ThreadInit(mainThreadName, ThreadPriorityDefault, &pThread, FALSE);
+    status = _ThreadInit(mainThreadName, ThreadPriorityDefault, NULL, FALSE);
     if (!SUCCEEDED(status))
     {
         LOG_FUNC_ERROR("_ThreadInit", status );
@@ -238,6 +238,7 @@ ThreadSystemInitIdleForCurrentCPU(
         LOG_FUNC_ERROR("ThreadCreate", status);
         return status;
     }
+    LogSetLevel(LogLevelInfo);
     LOGPL("ThreadCreate for IDLE thread succeeded\n");
 
     ThreadCloseHandle(idleThread);
@@ -729,7 +730,7 @@ _ThreadInit(
     LOG_FUNC_START;
 
     ASSERT(NULL != Name);
-    ASSERT(NULL != Thread);
+    //ASSERT(NULL != Thread);
     ASSERT_INFO(ThreadPriorityLowest <= Priority && Priority <= ThreadPriorityMaximum,
                 "Priority is 0x%x\n", Priority);
 

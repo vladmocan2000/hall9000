@@ -61,6 +61,8 @@ Entry64(
     ASSERT(SUCCEEDED(status));
 
     LOGL("InitSystem executed successfully\n");
+    LogSetLevel(LogLevelTrace);
+    LogSetTracedComponents(LogComponentThread);
 
 #ifdef TST
     TestRunAllFunctional();
