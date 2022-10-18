@@ -558,6 +558,8 @@ ThreadExit(
         LockRelease(&pThread->BlockLock, INTR_OFF);
     }
 
+    LOG("The thread %d is finished!\n", pThread->Id);
+
     pThread->State = ThreadStateDying;
     pThread->ExitStatus = ExitStatus;
     ExEventSignal(&pThread->TerminationEvt);
@@ -793,6 +795,8 @@ _ThreadInit(
         pThread->Id = _ThreadSystemGetNextTid();
         pThread->State = ThreadStateBlocked;
         pThread->Priority = Priority;
+
+        LOG("The thread %d is created!\n", pThread->Id);
 
         LockInit(&pThread->BlockLock);
 

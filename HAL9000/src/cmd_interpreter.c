@@ -106,7 +106,10 @@ static const COMMAND_DEFINITION COMMANDS[] =
     { "rangefail", "Causes a range check failure to assert", CmdRangeFail, 0, 0},
     { "bitecookie", "Causes a GS cookie corruption to assert", CmdBiteCookie, 0, 0},
 
-    { "help", "Displays this help menu", _CmdPrintHelp, 0, 0}
+    { "help", "Displays this help menu", _CmdPrintHelp, 0, 0},
+
+    { "test", "Test function with 1 or 2 parameters.", CmdTest, 1, 2},
+    { "list", "Creates a list of numbers that are in the given interval (2 parameters), prints the list and deallocates the memory.", CmdLists, 2, 2}
 };
 
 #define NO_OF_COMMANDS      ARRAYSIZE(COMMANDS)

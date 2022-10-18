@@ -153,3 +153,106 @@ void
 
     TestRunAllPerformance();
 }
+
+
+void
+(__cdecl CmdTest)(
+    IN          QWORD       NumberOfParameters,
+    IN          char*       param1,
+    IN          char*       param2
+    )
+{
+    if (NumberOfParameters == 1) {
+
+        LOG("The function has 1 parameter: %s.\n", param1);
+    }
+    else {
+
+        LOG("The function has 2 parameters: %s, %s.\n", param1, param2);
+    }
+}
+
+typedef struct _MY_ENTRY {
+
+    LIST_ENTRY      ListEntry;
+    DWORD           Value;
+
+} MY_ENTRY, * PMY_ENTRY;
+
+static
+STATUS
+(__cdecl _MyListFunction) (
+    IN      PLIST_ENTRY     ListEntry,
+    IN_OPT  PVOID           FunctionContext
+    )
+{
+    UNREFERENCED_PARAMETER(FunctionContext);
+    PMY_ENTRY pMyEntry = CONTAINING_RECORD(ListEntry, MY_ENTRY, ListEntry);
+    LOG("%d, ", pMyEntry->Value);
+
+    return STATUS_SUCCESS;
+}
+
+void 
+(__cdecl CmdLists)(
+    IN          QWORD       NumberOfParameters,
+    IN          char*       firstIntervalLimit,
+    IN          char*       secondIntervalLimit
+    )
+{
+    if (NumberOfParameters == 0) {
+        return;
+    }
+    DWORD dwMin = 0, dwMax = 0;
+    atoi(&dwMin, firstIntervalLimit, 10, FALSE);
+    atoi(&dwMax, secondIntervalLimit, 10, FALSE);
+
+    if (dwMin > dwMax) {
+
+        dwMax ^= dwMin;
+        dwMin ^= dwMax;
+        dwMax ^= dwMin;
+    }
+
+    LIST_ENTRY head;
+    InitializeListHead(&head);
+    for (DWORD dwIndex = dwMin; dwIndex <= dwMax; dwIndex++) {
+
+        PMY_ENTRY pMyEntry = ExAllocatePoolWithTag(PoolAllocateZeroMemory, sizeof(MY_ENTRY), HEAP_TEST_TAG, PAGE_SIZE);
+        if (pMyEntry == NULL) {
+
+            LOG_FUNC_ERROR("ExAllocatePoolWithTag", STATUS_HEAP_INSUFFICIENT_RESOURCES);
+        }
+
+        pMyEntry->Value = dwIndex;
+        InsertTailList(&head, &(pMyEntry->ListEntry));
+    }
+
+
+    for (PLIST_ENTRY pEntry = head.Flink; pEntry != &head; pEntry = pEntry->Flink) {
+
+        PMY_ENTRY pMyEntry = CONTAINING_RECORD(pEntry, MY_ENTRY, ListEntry);
+        LOG("%d, ", pMyEntry->Value);
+    }
+    LOG("\n");
+
+    LIST_ITERATOR iterator;
+    PLIST_ENTRY pListEntry;
+    ListIteratorInit(&head, &iterator);
+    while ((pListEntry = ListIteratorNext(&iterator)) != NULL) {
+
+        PMY_ENTRY pMyEntry = CONTAINING_RECORD(pListEntry, MY_ENTRY, ListEntry);
+        LOG("%d, ", pMyEntry->Value);
+    }
+    LOG("\n");
+
+    ForEachElementExecute(&head, _MyListFunction, NULL, FALSE);
+    LOG("\n");
+
+    while(!IsListEmpty(&head)) {
+
+        pListEntry = RemoveHeadList(&head);
+        PMY_ENTRY pMyEntry = CONTAINING_RECORD(pListEntry, MY_ENTRY, ListEntry);
+        ExFreePoolWithTag(pMyEntry, HEAP_TEST_TAG);
+    }
+}
