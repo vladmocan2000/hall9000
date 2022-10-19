@@ -620,8 +620,17 @@ ThreadGetName(
     )
 {
     PTHREAD pThread = Thread;
+    if (pThread == NULL) {
 
-    return pThread->Name;
+        pThread = GetCurrentThread();
+    }
+
+    if (pThread != NULL) {
+     
+        return pThread->Name;
+    }
+
+    return "";
 }
 
 TID

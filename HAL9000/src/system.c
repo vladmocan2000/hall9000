@@ -46,10 +46,10 @@ SystemPreinit(
     BootModulesPreinit();
     DumpPreinit();
     ThreadSystemPreinit();
-    printSystemPreinit(NULL);
-    LogSystemPreinit();
-    OsInfoPreinit();
-    MmuPreinitSystem();
+    printSystemPreinit(NULL);//__halt();
+    LogSystemPreinit(); //__halt();
+    OsInfoPreinit();// __halt();
+    MmuPreinitSystem(); //__halt();
     IomuPreinitSystem();
     AcpiInterfacePreinit();
     SmpPreinit();

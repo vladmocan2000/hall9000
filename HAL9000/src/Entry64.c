@@ -38,7 +38,7 @@ Entry64(
 
     status = CpuMuSetMonitorFilterSize(sizeof(MONITOR_LOCK));
     initSettings.MonitorSupport = SUCCEEDED(status);
-
+    //__halt();
     status = CommonLibInit(&initSettings);
     if (!SUCCEEDED(status))
     {
@@ -48,10 +48,10 @@ Entry64(
 
     ASSERT_INFO(1 == argc, "We are always expecting a single parameter\n");
     ASSERT_INFO(NULL != argv, "We are expecting a non-NULL pointer\n");
-
-    gVirtualToPhysicalOffset = argv->VirtualToPhysicalOffset;
+    //__halt();
+    gVirtualToPhysicalOffset = argv->VirtualToPhysicalOffset; //__halt();
     SystemPreinit();
-
+    //__halt();
     DumpParameters(argv);
 
     status = SystemInit(argv);
