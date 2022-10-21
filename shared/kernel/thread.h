@@ -1,7 +1,9 @@
 #pragma once
 
 #include "thread_defs.h"
-
+DWORD
+GetNumberOfAllThreads(
+);
 //******************************************************************************
 // Function:     ThreadCreate
 // Description:  Spawns a new thread named Name with priority Function which

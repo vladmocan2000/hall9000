@@ -109,7 +109,8 @@ static const COMMAND_DEFINITION COMMANDS[] =
     { "help", "Displays this help menu", _CmdPrintHelp, 0, 0},
 
     { "test", "Test function with 1 or 2 parameters.", CmdTest, 1, 2},
-    { "list", "Creates a list of numbers that are in the given interval (2 parameters), prints the list and deallocates the memory.", CmdLists, 2, 2}
+    { "list", "Creates a list of numbers that are in the given interval (2 parameters), prints the list and deallocates the memory.", CmdLists, 2, 2},
+    { "readythreads", "Display information about all the threads in the ready list", CmdListReadyThreads, 0, 0}
 };
 
 #define NO_OF_COMMANDS      ARRAYSIZE(COMMANDS)

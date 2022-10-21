@@ -128,7 +128,7 @@ void
     STATUS status;
 
     ASSERT(NumberOfParameters == 0);
-
+    LOG("Number of threads: %d\n", GetNumberOfAllThreads());
     LOG("%7s", "TID|");
     LOG("%20s", "Name|");
     LOG("%5s", "Prio|");
@@ -137,10 +137,34 @@ void
     LOG("%10s", "Prt ticks|");
     LOG("%10s", "Ttl ticks|");
     LOG("%10s", "Process|");
+    LOG("%10s", "ParentId|");
     LOG("\n");
 
     status = ThreadExecuteForEachThreadEntry(_CmdThreadPrint, NULL );
     ASSERT( SUCCEEDED(status));
+}
+
+void
+(__cdecl CmdListReadyThreads)(
+    IN          QWORD       NumberOfParameters
+) 
+{
+    STATUS status;
+
+    ASSERT(NumberOfParameters == 0);
+    LOG("%7s", "TID|");
+    LOG("%20s", "Name|");
+    LOG("%5s", "Prio|");
+    LOG("%8s", "State|");
+    LOG("%10s", "Cmp ticks|");
+    LOG("%10s", "Prt ticks|");
+    LOG("%10s", "Ttl ticks|");
+    LOG("%10s", "Process|");
+    LOG("%10s", "ParentId|");
+    LOG("\n");
+
+    status = ThreadExecuteForEachReadyThreadEntry(_CmdThreadPrint, NULL);
+    ASSERT(SUCCEEDED(status));
 }
 
 void
@@ -693,6 +717,7 @@ STATUS
     LOG("%9U%c", pThread->TickCountEarly, '|');
     LOG("%9U%c", pThread->TickCountCompleted + pThread->TickCountEarly, '|');
     LOG("%9x%c", pThread->Process->Id, '|');
+    LOG("%9x%c", pThread->ParentId, '|');
     LOG("\n");
 
     return STATUS_SUCCESS;

@@ -39,7 +39,7 @@ typedef struct _THREAD
 
     TID                     Id;
     char*                   Name;
-
+    TID                     ParentId;
     // Currently the thread priority is not used for anything
     THREAD_PRIORITY         Priority;
     THREAD_STATE            State;
@@ -252,6 +252,11 @@ ThreadExecuteForEachThreadEntry(
     IN_OPT  PVOID               Context
     );
 
+STATUS
+ThreadExecuteForEachReadyThreadEntry(
+    IN      PFUNC_ListFunction  Function,
+    IN_OPT  PVOID               Context
+);
 
 //******************************************************************************O
 // Function:     GetCurrentThread
