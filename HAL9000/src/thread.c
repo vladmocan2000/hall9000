@@ -9,10 +9,12 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
+#include "iomu.h"
 
-#define TID_INCREMENT               4
+#define TID_INCREMENT               5
 
-#define THREAD_TIME_SLICE           1
+#define THREAD_ODD_ID_TIME_SLICE   3
+#define THREAD_EVEN_ID_TIME_SLICE   6
 
 extern void ThreadStart();
 
@@ -410,6 +412,10 @@ ThreadCreateEx(
     }
     else
     {
+        GetCurrentThread()->NumberOfChildrenCreated++;
+        _InterlockedIncrement(&GetCurrentThread()->NumberOfActiveChildren);
+        LOG("Thread [ID=%d] is the %dth thread created by thread [ID=%d] on CPU [%d]\n", pThread->Id, GetCurrentThread()->NumberOfActiveChildren, GetCurrentThread()->Id, pThread->CreationCpuApicId);
+
         ThreadUnblock(pThread);
     }
 
@@ -440,8 +446,13 @@ ThreadTick(
     }
     pThread->TickCountCompleted++;
 
-    if (++pCpu->ThreadData.RunningThreadTicks >= THREAD_TIME_SLICE)
-    {
+    pThread->TotalTimeSlicesAllocated++;
+
+    if ((pThread->Id % 2 == 0 &&
+        ++pCpu->ThreadData.RunningThreadTicks >= THREAD_EVEN_ID_TIME_SLICE) ||
+        (pThread->Id % 2 == 1 &&
+        ++pCpu->ThreadData.RunningThreadTicks >= THREAD_ODD_ID_TIME_SLICE)) {
+
         LOG_TRACE_THREAD("Will yield on return\n");
         pCpu->ThreadData.YieldOnInterruptReturn = TRUE;
     }
@@ -539,6 +550,29 @@ ThreadUnblock(
     LockRelease(&Thread->BlockLock, oldState);
 }
 
+PTHREAD _ThreadReferenceById(TID Tid)
+{
+    INTR_STATE oldState;
+    LockAcquire(&m_threadSystemData.AllThreadsLock, &oldState);
+    
+    PLIST_ENTRY pListEntry = m_threadSystemData.AllThreadsList.Flink;
+    while (pListEntry != &m_threadSystemData.AllThreadsList)
+    {
+        PTHREAD thread = CONTAINING_RECORD(pListEntry, THREAD, AllList);
+        if (thread->Id == Tid) {
+
+            _ThreadReference(thread);
+            LockRelease(&m_threadSystemData.AllThreadsLock, oldState);
+            return thread;
+        }
+
+        pListEntry = pListEntry->Flink;
+    }
+
+    LockRelease(&m_threadSystemData.AllThreadsLock, oldState);
+    return NULL;
+}
+
 void
 ThreadExit(
     IN      STATUS              ExitStatus
@@ -550,7 +584,27 @@ ThreadExit(
     LOG_FUNC_START_THREAD;
 
     pThread = GetCurrentThread();
+    
+    LOG("Thread [ID=%d] was allocated %d time quanta of length %d MS_IN_US\n", pThread->Id, pThread->TotalTimeSlicesAllocated, IomuGetTimerInterrupTimeUs()/1000);
 
+    PTHREAD pParent = _ThreadReferenceById(pThread->ParentId);
+    if (!pParent) {
+
+        LOG("Thread [ID=%d] created on CPU [ID=%d] is finishing on CPU [ID=%d], while it’s parent thread is already destroyed\n", 
+            pThread->Id, 
+            pThread->CreationCpuApicId, 
+            GetCurrentPcpu()->ApicId);
+    }
+    else
+    {
+        LOG("Thread [ID=%d] created on CPU [ID=%d] is finishing on CPU [ID=%d], while it’s parent thread [ID=%d] still has more %d child threads\n",
+            pThread->Id,
+            pThread->CreationCpuApicId,
+            GetCurrentPcpu()->ApicId,
+            pParent->Id,
+            _InterlockedDecrement(&pParent->NumberOfActiveChildren));
+        _ThreadDereference(pParent);
+    }
     CpuIntrDisable();
 
     if (LockIsOwner(&pThread->BlockLock))
@@ -793,6 +847,13 @@ _ThreadInit(
         pThread->Id = _ThreadSystemGetNextTid();
         pThread->State = ThreadStateBlocked;
         pThread->Priority = Priority;
+        pThread->CreationCpuApicId = GetCurrentPcpu()->ApicId;
+
+        PTHREAD currentThread = GetCurrentThread();
+        pThread->ParentId = currentThread ? currentThread->Id : 0;
+        pThread->NumberOfChildrenCreated = 0;
+        pThread->NumberOfActiveChildren = 0;
+        pThread->TotalTimeSlicesAllocated = 0;
 
         LockInit(&pThread->BlockLock);
 

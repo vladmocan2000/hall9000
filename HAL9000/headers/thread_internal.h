@@ -90,6 +90,17 @@ typedef struct _THREAD
     PVOID                   UserStack;
 
     struct _PROCESS*        Process;
+
+    APIC_ID                 CreationCpuApicId;
+
+    TID                     ParentId;
+
+    DWORD                   NumberOfChildrenCreated;
+
+    volatile DWORD          NumberOfActiveChildren;
+
+    DWORD                   TotalTimeSlicesAllocated;
+
 } THREAD, *PTHREAD;
 
 //******************************************************************************
