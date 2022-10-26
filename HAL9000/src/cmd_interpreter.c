@@ -106,6 +106,8 @@ static const COMMAND_DEFINITION COMMANDS[] =
     { "rangefail", "Causes a range check failure to assert", CmdRangeFail, 0, 0},
     { "bitecookie", "Causes a GS cookie corruption to assert", CmdBiteCookie, 0, 0},
 
+    { "testLp", "Creates a tree of threads, each leaf level having less children then the parent level. Takes as argument the number of threads on the first level.", CmdTestLightProject, 1, 1},
+
     { "help", "Displays this help menu", _CmdPrintHelp, 0, 0}
 };
 

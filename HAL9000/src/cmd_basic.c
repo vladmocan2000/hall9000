@@ -6,7 +6,7 @@
 #include "iomu.h"
 #include "test_common.h"
 #include "strutils.h"
-
+#include "test_lp.h"
 void
 CmdPrintVolumeInformation(
     IN      QWORD           NumberOfParameters
@@ -152,4 +152,16 @@ void
     ASSERT(NumberOfParameters == 0);
 
     TestRunAllPerformance();
+}
+
+void
+(__cdecl CmdTestLightProject)(
+    IN          QWORD       NumberOfParameters,
+    IN          char*       NumberOfThreads
+    )
+{
+    ASSERT(NumberOfParameters == 1);
+    int v;
+    atoi(&v, NumberOfThreads, BASE_TEN, FALSE);
+    _ThreadLpTest(v);
 }
