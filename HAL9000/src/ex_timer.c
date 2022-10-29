@@ -133,12 +133,15 @@ ExTimerUninit(
 {
     ASSERT(Timer != NULL);
 
+    ExTimerStop(Timer);
+
     INTR_STATE oldState;
     LockAcquire(&m_globalTimerList.TimerListLock, &oldState);
-    RemoveEntryList(&Timer->TimerListElem);
-    LockRelease(&m_globalTimerList.TimerListLock, oldState);
+    if (Timer->TimerListElem.Flink->Blink == &Timer->TimerListElem && Timer->TimerListElem.Blink->Flink == &Timer->TimerListElem) {
 
-    ExTimerStop(Timer);
+        RemoveEntryList(&Timer->TimerListElem);
+    }
+    LockRelease(&m_globalTimerList.TimerListLock, oldState);
 
     Timer->TimerUninited = TRUE;
 }
@@ -165,8 +168,8 @@ BOOLEAN ExTimerCheck (
     PEX_TIMER pTimer = CONTAINING_RECORD(ListEntry, EX_TIMER, TimerListElem);
     if (pTimer->TriggerTimeUs <= IomuGetSystemTimeUs()) {
 
-        RemoveEntryList(&pTimer->TimerListElem);
         ExEventSignal(&pTimer->TimerEvent);
+        RemoveEntryList(&pTimer->TimerListElem);
         return TRUE;
     }
 
@@ -177,6 +180,6 @@ void ExTimerCheckAll() {
 
     INTR_STATE oldState;
     LockAcquire(&m_globalTimerList.TimerListLock, &oldState);
-    while (m_globalTimerList.TimerListHead.Flink != &m_globalTimerList.TimerListHead && ExTimerCheck(&m_globalTimerList.TimerListHead)) {}
+    while (!IsListEmpty(&m_globalTimerList.TimerListHead) && ExTimerCheck(m_globalTimerList.TimerListHead.Flink)) {}
     LockRelease(&m_globalTimerList.TimerListLock, oldState);
 }
