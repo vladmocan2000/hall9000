@@ -1191,6 +1191,15 @@ _ThreadDestroy(
     RemoveEntryList(&pThread->AllList);
     LockRelease(&m_threadSystemData.AllThreadsLock, oldState);
 
+    PPROCESS pProcess = GetCurrentProcess();
+    INTR_STATE state1, state2;
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state1);
+    LockAcquire(&pProcess->NumberOfUsermodeThreadsLock, &state2);
+    RemoveEntryList(&pThread->ProcessUsermodeThreadListElem);
+    pProcess->NumberOfUsermodeThreads--;
+    LockRelease(&pProcess->NumberOfUsermodeThreadsLock, state2);
+    LockRelease(&pProcess->UsermodeThreadListLock, state1);
+
     // This must be done before removing the thread from the process list, else
     // this may be the last thread and the process VAS will be freed by the time
     // ProcessRemoveThreadFromList - this function also dereferences the process

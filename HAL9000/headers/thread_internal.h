@@ -4,6 +4,7 @@
 #include "ref_cnt.h"
 #include "ex_event.h"
 #include "thread.h"
+#include "syscall_defs.h"
 
 typedef enum _THREAD_STATE
 {
@@ -90,6 +91,18 @@ typedef struct _THREAD
     PVOID                   UserStack;
 
     struct _PROCESS*        Process;
+
+    LOCK                    ProcessUsermodeThreadListElemLock;
+
+    _Guarded_by_(ProcessUsermodeThreadListElemLock)
+    LIST_ENTRY              ProcessUsermodeThreadListElem;
+
+    LOCK                    HandleValueLock;
+    
+    _Guarded_by_(HandleValueLock)
+    UM_HANDLE               HandleValue;
+
+
 } THREAD, *PTHREAD;
 
 //******************************************************************************

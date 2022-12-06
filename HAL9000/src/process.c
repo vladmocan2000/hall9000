@@ -244,6 +244,16 @@ ProcessCreate(
         status = _ProcessInit(strrchr(PathToExe, '\\') + 1,
                               Arguments,
                               &pProcess);
+
+        INTR_STATE state;
+        LockAcquire(&pProcess->NumberOfUsermodeThreadsLock, &state);
+        pProcess->NumberOfUsermodeThreads = 0;
+        LockRelease(&pProcess->NumberOfUsermodeThreadsLock, state);
+
+        LockAcquire(&pProcess->UsermodeThreadListLock, &state);
+        InitializeListHead(&pProcess->HeadUsermodeThreadList);
+        LockRelease(&pProcess->UsermodeThreadListLock, state);
+
         if (!SUCCEEDED(status))
         {
             LOG_FUNC_ERROR("_ProcessInit", status);
