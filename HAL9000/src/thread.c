@@ -340,10 +340,23 @@ ThreadCreateEx(
     if (!Process->PagingData->Data.KernelSpace)
     {
         // Create user-mode stack
-        pThread->UserStack = MmuAllocStack(STACK_DEFAULT_SIZE,
-                                           TRUE,
-                                           FALSE,
-                                           Process);
+        if (Process->Id % 2 == 0) {
+
+            pThread->UserStack = MmuAllocStack(
+                STACK_DEFAULT_SIZE_EVEN_TID,
+                TRUE,
+                FALSE,
+                Process);
+        }
+        else {
+
+            pThread->UserStack = MmuAllocStack(
+                STACK_DEFAULT_SIZE_ODD_TID,
+                TRUE,
+                FALSE,
+                Process);
+        }
+
         if (pThread->UserStack == NULL)
         {
             status = STATUS_MEMORY_CANNOT_BE_COMMITED;
@@ -950,7 +963,8 @@ _ThreadSetupMainThreadUserStack(
     ASSERT(ResultingStack != NULL);
     ASSERT(Process != NULL);
 
-    *ResultingStack = InitialStack;
+    Process->ProcessUserSpaceStackStartAddress = InitialStack;
+    *ResultingStack = (PVOID)PtrDiff(InitialStack, SHADOW_STACK_SIZE + sizeof(PVOID));
 
     return STATUS_SUCCESS;
 }
@@ -1239,3 +1253,17 @@ _ThreadKernelFunction(
     ThreadExit(exitStatus);
     NOT_REACHED;
 }
+
+QWORD
+GetTotalThreadNo(
+) {
+
+    QWORD threadsNo;
+    INTR_STATE state;
+    LockAcquire(&m_threadSystemData.ReadyThreadsLock, &state);
+    threadsNo = (QWORD)ListSize(&m_threadSystemData.ReadyThreadsList);
+    LockRelease(&m_threadSystemData.ReadyThreadsLock, state);
+
+    return threadsNo;
+}
+

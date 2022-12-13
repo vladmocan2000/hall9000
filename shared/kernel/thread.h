@@ -119,3 +119,10 @@ THREAD_PRIORITY
 ThreadGetPriority(
     IN_OPT  PTHREAD             Thread
     );
+
+
+QWORD
+GetTotalThreadNo(
+    void
+    );
+

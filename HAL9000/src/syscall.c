@@ -7,6 +7,9 @@
 #include "mmu.h"
 #include "process_internal.h"
 #include "dmp_cpu.h"
+#include "thread.h"
+#include "print.h"
+#include "thread_internal.h"
 
 extern void SyscallEntry();
 
@@ -68,6 +71,32 @@ SyscallHandler(
             status = SyscallValidateInterface((SYSCALL_IF_VERSION)*pSyscallParameters);
             break;
         // STUDENT TODO: implement the rest of the syscalls
+        case SyscallIdFileWrite:
+            status = SyscallFileWrite(
+
+                (UM_HANDLE)pSyscallParameters[0],
+                (PVOID)pSyscallParameters[1],
+                (QWORD)pSyscallParameters[2],
+                (QWORD*)pSyscallParameters[3]
+            );
+            break;
+        case SyscallIdThreadExit:
+            status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
+            break;
+        case SyscallIdThreadGetTid:
+            status = SyscallThreadGetTid((UM_HANDLE)pSyscallParameters[0], (TID*)pSyscallParameters[1]);
+            break;
+        case SyscallIdThreadGetName:
+            status = SyscallThreadGetName((char*)pSyscallParameters[0], (QWORD)pSyscallParameters[1]);
+            break;
+        case SyscallIdGetTotalThreadNo:
+            status = SyscallGetTotalThreadNo((QWORD*)pSyscallParameters[0]);
+            break;
+        case SyscallIdGetThreadUmStackAddress:
+            status = SyscallGetThreadUmStackAddress((PVOID*)pSyscallParameters[0]);
+            break;
+        case SyscallIdGetThreadUmStackSize:
+            status = SyscallGetThreadUmStackSize((QWORD*)pSyscallParameters[0]);
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -170,3 +199,117 @@ SyscallValidateInterface(
 }
 
 // STUDENT TODO: implement the rest of the syscalls
+
+STATUS
+SyscallThreadExit(
+    IN      STATUS                  ExitStatus
+) {
+    UNREFERENCED_PARAMETER(ExitStatus);
+
+    ThreadExit(ExitStatus);
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallFileWrite(
+    IN  UM_HANDLE                   FileHandle,
+    IN_READS_BYTES(BytesToWrite)
+    PVOID                           Buffer,
+    IN  QWORD                       BytesToWrite,
+    OUT QWORD*                      BytesWritten
+) {
+    
+    if (UM_FILE_HANDLE_STDOUT != FileHandle)
+    {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    STATUS status = MmuIsBufferValid(Buffer, BytesToWrite, PAGE_RIGHTS_READ, GetCurrentProcess());//write -> read
+    if (!SUCCEEDED(status))
+    {
+        return status;
+    }
+
+    char* buffer = Buffer;
+    for (int i = 0; i < BytesToWrite; i++) {
+
+        printf("%c", *(buffer + i));
+    }
+    *BytesWritten = BytesToWrite;
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadGetTid(
+    IN_OPT  UM_HANDLE               ThreadHandle,
+    OUT     TID*                    ThreadId
+) {
+
+    if (ThreadHandle == HANDLE_CURRENT_THREAD) {
+
+        *ThreadId = GetCurrentThread()->Id;
+        return STATUS_SUCCESS;
+    }
+
+    return STATUS_UNSUCCESSFUL;
+}
+
+STATUS SyscallThreadGetName(
+    OUT char*                      ThreadName,
+    IN QWORD                       ThreadNameMaxLen
+) {
+
+    STATUS status = MmuIsBufferValid(ThreadName, ThreadNameMaxLen, PAGE_RIGHTS_WRITE, GetCurrentProcess());
+    if (!SUCCEEDED(status))
+    {
+        return status;
+    }
+
+    char* name = GetCurrentThread()->Name;
+    int i;
+    for (i = 0; i < ThreadNameMaxLen - 1 && i < (int)strlen(name); i++) {
+
+        *(ThreadName + i) = *(name + i);
+    }
+    *(ThreadName + i) = '\0';
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallGetTotalThreadNo(
+    OUT QWORD*                     ThreadNo
+) {
+
+    *ThreadNo = GetTotalThreadNo();
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallGetThreadUmStackAddress(
+    OUT PVOID* StackBaseAddress
+) {
+
+    *StackBaseAddress = GetCurrentProcess()->ProcessUserSpaceStackStartAddress;
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallGetThreadUmStackSize(
+    OUT QWORD* StackSize
+) {
+
+    PPROCESS process = GetCurrentProcess();
+    if (process->Id % 2 == 0) {
+
+        *StackSize = 16 * PAGE_SIZE;
+    }
+    else {
+
+        *StackSize = 4 * PAGE_SIZE;
+    }
+
+    return STATUS_SUCCESS;
+}
