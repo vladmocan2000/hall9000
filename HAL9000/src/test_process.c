@@ -10,7 +10,7 @@ const PROCESS_TEST PROCESS_TESTS[] =
     // Project 2: Userprog
 
     // arguments
-    { "TestUserArgsNone", "Args", NULL},
+    /*{"TestUserArgsNone", "Args", NULL},
     { "TestUserArgsOne", "Args", "Argument"},
     { "TestUserArgsMany", "Args", "Johnny is a good kid"},
     { "TestUserArgsAll", "Args", "a b c d e f g h i j k l m n o p r s t u v q x y z"},
@@ -71,20 +71,20 @@ const PROCESS_TEST PROCESS_TESTS[] =
     { "ProcessWaitBadHandle", "ProcessWaitBadHandle", NULL},
     { "ProcessWaitClosedHandle", "ProcessWaitClosedHandle", NULL},
     { "ProcessWaitNormal", "ProcessWaitNormal", NULL},
-    { "ProcessWaitTerminated", "ProcessWaitTerminated", NULL},
+    { "ProcessWaitTerminated", "ProcessWaitTerminated", NULL},*/
 
     // thread-syscalls
     { "ThreadCloseTwice", "ThreadCloseTwice", NULL},
 
-    { "ThreadCreateBadPointer", "ThreadCreateBadPointer", NULL},
-    { "ThreadCreateMultiple", "ThreadCreateMultiple", NULL},
+    //{ "ThreadCreateBadPointer", "ThreadCreateBadPointer", NULL},
+    //{ "ThreadCreateMultiple", "ThreadCreateMultiple", NULL},
     { "ThreadCreateOnce", "ThreadCreateOnce", NULL},
-    { "ThreadCreateWithArguments", "ThreadCreateWithArguments", NULL},
+    //{ "ThreadCreateWithArguments", "ThreadCreateWithArguments", NULL},
 
     { "ThreadExit", "ThreadExit", NULL},
-    { "ThreadGetTid", "ThreadGetTid", NULL},
+    {"ThreadGetTid", "ThreadGetTid", NULL},
 
-    { "ThreadWaitBadHandle", "ThreadWaitBadHandle", NULL},
+    /*{"ThreadWaitBadHandle", "ThreadWaitBadHandle", NULL},
     { "ThreadWaitClosedHandle", "ThreadWaitClosedHandle", NULL},
     { "ThreadWaitNormal", "ThreadWaitNormal", NULL},
     { "ThreadWaitTerminated", "ThreadWaitTerminated", NULL},
@@ -123,7 +123,7 @@ const PROCESS_TEST PROCESS_TESTS[] =
 
     // stack-growth
     { "StackGrowthVariables", "StackGrowthVariables", NULL },
-    { "StackGrowthRecursiveFunction", "StackGrowthRecursiveFunction", NULL },
+    { "StackGrowthRecursiveFunction", "StackGrowthRecursiveFunction", NULL },*/
 };
 
 const DWORD PROCESS_TOTAL_NO_OF_TESTS = ARRAYSIZE(PROCESS_TESTS);

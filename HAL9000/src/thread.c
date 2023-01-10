@@ -336,6 +336,7 @@ ThreadCreateEx(
 
     // the reference must be done outside _ThreadInit
     _ThreadReference(pThread);
+    _ThreadReference(pThread);
 
     if (!Process->PagingData->Data.KernelSpace)
     {
@@ -950,7 +951,7 @@ _ThreadSetupMainThreadUserStack(
     ASSERT(ResultingStack != NULL);
     ASSERT(Process != NULL);
 
-    *ResultingStack = InitialStack;
+    *ResultingStack = (PVOID)PtrDiff(InitialStack, SHADOW_STACK_SIZE + sizeof(PVOID));
 
     return STATUS_SUCCESS;
 }

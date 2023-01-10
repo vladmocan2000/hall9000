@@ -7,6 +7,8 @@
 #include "mmu.h"
 #include "process_internal.h"
 #include "dmp_cpu.h"
+#include "thread.h"
+#include "thread_internal.h"
 
 extern void SyscallEntry();
 
@@ -68,6 +70,46 @@ SyscallHandler(
             status = SyscallValidateInterface((SYSCALL_IF_VERSION)*pSyscallParameters);
             break;
         // STUDENT TODO: implement the rest of the syscalls
+
+        case SyscallIdProcessExit:
+            status = SyscallProcessExit((STATUS)*pSyscallParameters);
+            break;
+        case SyscallIdThreadExit:
+            status = SyscallThreadExit((STATUS)*pSyscallParameters);
+            break;
+        case SyscallIdFileWrite:
+            status = SyscallFileWrite(
+                (UM_HANDLE)pSyscallParameters[0],
+                (PVOID)pSyscallParameters[1],
+                (QWORD)pSyscallParameters[2],
+                (QWORD*)pSyscallParameters[3]
+            );
+            break;
+        case SyscallIdThreadCreate:
+            status = SyscallThreadCreate(
+                (PFUNC_ThreadStart)pSyscallParameters[0],
+                (PVOID)pSyscallParameters[1],
+                (UM_HANDLE*)pSyscallParameters[2]
+            );
+            break;
+        case SyscallIdThreadGetTid:
+            status = SyscallThreadGetTid(
+                (UM_HANDLE)pSyscallParameters[0],
+                (TID*)pSyscallParameters[1]
+            );
+            break;
+        case SyscallIdThreadWaitForTermination:
+            status = SyscallThreadWaitForTermination(
+                (UM_HANDLE)pSyscallParameters[0],
+                (STATUS*)pSyscallParameters[1]
+            );
+            break;
+        case SyscallIdThreadCloseHandle:
+            status = SyscallThreadCloseHandle(
+                (UM_HANDLE)*pSyscallParameters
+            );
+            break;
+
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -170,3 +212,207 @@ SyscallValidateInterface(
 }
 
 // STUDENT TODO: implement the rest of the syscalls
+
+STATUS
+SyscallProcessExit(
+    IN      STATUS                  ExitStatus
+)
+{
+    PPROCESS Process;
+    Process = GetCurrentProcess();
+    Process->TerminationStatus = ExitStatus;
+    ProcessTerminate(Process);
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadExit(
+    IN  STATUS                      ExitStatus
+)
+{
+    PPROCESS pProcess = GetCurrentProcess();
+    INTR_STATE state1, state2;
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state1);
+    LockAcquire(&pProcess->NumberOfUsermodeThreadsLock, &state2);
+    if (&GetCurrentThread()->ProcessUsermodeThreadListElem != NULL) {
+
+        //RemoveEntryList(&GetCurrentThread()->ProcessUsermodeThreadListElem);
+        //pProcess->NumberOfUsermodeThreads--;
+    }
+    LockRelease(&pProcess->NumberOfUsermodeThreadsLock, state2);
+    LockRelease(&pProcess->UsermodeThreadListLock, state1);
+
+    ThreadExit(ExitStatus);
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallFileWrite(
+    IN  UM_HANDLE                   FileHandle,
+    IN_READS_BYTES(BytesToWrite)
+    PVOID                       Buffer,
+    IN  QWORD                       BytesToWrite,
+    OUT QWORD * BytesWritten
+)
+{
+    if (BytesWritten == NULL) {
+        return STATUS_UNSUCCESSFUL;    
+    }
+    
+        if (FileHandle == UM_FILE_HANDLE_STDOUT) {
+        *BytesWritten = BytesToWrite;
+        LOG("[%s]:[%s]\n", ProcessGetName(NULL), Buffer);
+        return STATUS_SUCCESS;
+    }
+    
+    *BytesWritten = BytesToWrite;
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadCreate(
+    IN      PFUNC_ThreadStart       StartFunction,
+    IN_OPT  PVOID                   Context,
+    OUT     UM_HANDLE* ThreadHandle
+) {
+    PPROCESS pProcess = GetCurrentProcess();
+
+    if (STATUS_SUCCESS != MmuIsBufferValid((PVOID)StartFunction, sizeof(PFUNC_ThreadStart), PAGE_RIGHTS_READ, pProcess)) {
+
+        return STATUS_UNSUCCESSFUL;
+    }
+    if (Context != 0 && STATUS_SUCCESS != MmuIsBufferValid((PVOID)Context, sizeof(PVOID), PAGE_RIGHTS_READ, pProcess)) {
+
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if (ThreadHandle != 0 && STATUS_SUCCESS != MmuIsBufferValid((PVOID)ThreadHandle, sizeof(PVOID), PAGE_RIGHTS_WRITE, pProcess)) {
+
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PTHREAD pThread = NULL;
+
+    INTR_STATE state1, state3;
+    LockAcquire(&pProcess->NumberOfUsermodeThreadsLock, &state1);
+    char threadName[1000];
+    sprintf(threadName, "usermodeThread%d", ++pProcess->NumberOfUsermodeThreads);
+    STATUS status = ThreadCreateEx(threadName, ThreadPriorityDefault, StartFunction, Context, &pThread, GetCurrentProcess());
+
+    if (!SUCCEEDED(status)) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state3);
+    InsertTailList(&pProcess->HeadUsermodeThreadList, &pThread->ProcessUsermodeThreadListElem);
+
+    LockRelease(&pProcess->UsermodeThreadListLock, state3);
+    LockRelease(&pProcess->NumberOfUsermodeThreadsLock, state1);
+
+    LockAcquire(&pThread->HandleValueLock, &state3);
+    pThread->HandleValue = pProcess->NumberOfUsermodeThreads;
+    *ThreadHandle = pThread->HandleValue;
+    LockRelease(&pThread->HandleValueLock, state3);
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadGetTid(
+    IN_OPT  UM_HANDLE               ThreadHandle,
+    OUT     TID* ThreadId
+) {
+    PPROCESS pProcess = GetCurrentProcess();
+
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        PTHREAD cThread = GetCurrentThread();
+        if (cThread == NULL) {
+            return STATUS_UNSUCCESSFUL;
+        }
+        *ThreadId = cThread->Id;
+        return STATUS_SUCCESS;
+    }
+    INTR_STATE state;
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state);
+    LIST_ITERATOR it;
+    ListIteratorInit(&pProcess->HeadUsermodeThreadList, &it);
+
+    PLIST_ENTRY pEntry;
+    while ((pEntry = ListIteratorNext(&it)) != NULL)
+    {
+        //for (PLIST_ENTRY pEntry = &pProcess->HeadUsermodeThreadList.Flink; pEntry != &pProcess->HeadUsermodeThreadList; pEntry = pEntry->Flink) {
+
+        PTHREAD pThread = CONTAINING_RECORD(pEntry, THREAD, ProcessUsermodeThreadListElem);
+        if (pThread->HandleValue == ThreadHandle) {
+
+            *ThreadId = pThread->Id;
+            LockRelease(&pProcess->UsermodeThreadListLock, state);
+            return STATUS_SUCCESS;
+        }
+    }
+    LockRelease(&pProcess->UsermodeThreadListLock, state);
+
+    return STATUS_UNSUCCESSFUL;
+}
+
+STATUS
+SyscallThreadWaitForTermination(
+    IN      UM_HANDLE               ThreadHandle,
+    OUT     STATUS* TerminationStatus
+) {
+
+    if (TerminationStatus == NULL || ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        *TerminationStatus = STATUS_UNSUCCESSFUL;
+        return STATUS_SUCCESS;
+    }
+
+    INTR_STATE state;
+    PPROCESS pProcess = GetCurrentProcess();
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state);
+    LIST_ITERATOR it;
+    ListIteratorInit(&pProcess->HeadUsermodeThreadList, &it);
+
+    PLIST_ENTRY pEntry;
+    while ((pEntry = ListIteratorNext(&it)) != NULL)
+    {
+        PTHREAD pThread = CONTAINING_RECORD(pEntry, THREAD, ProcessUsermodeThreadListElem);
+        if (pThread->HandleValue == ThreadHandle) {
+
+            ThreadWaitForTermination(pThread, TerminationStatus);
+            LockRelease(&pProcess->UsermodeThreadListLock, state);
+            return STATUS_SUCCESS;
+        }
+    }
+    LockRelease(&pProcess->UsermodeThreadListLock, state);
+
+    return STATUS_UNSUCCESSFUL;
+}
+
+STATUS
+SyscallThreadCloseHandle(
+    IN      UM_HANDLE               ThreadHandle
+) {
+    UNREFERENCED_PARAMETER(ThreadHandle);
+    INTR_STATE state;
+    PPROCESS pProcess = GetCurrentProcess();
+    LockAcquire(&pProcess->UsermodeThreadListLock, &state);
+    LIST_ITERATOR it;
+    ListIteratorInit(&pProcess->HeadUsermodeThreadList, &it);
+
+    PLIST_ENTRY pEntry;
+    while ((pEntry = ListIteratorNext(&it)) != NULL)
+    {
+        PTHREAD pThread = CONTAINING_RECORD(pEntry, THREAD, ProcessUsermodeThreadListElem);
+        if (pThread->HandleValue == ThreadHandle) {
+            //RemoveEntryList(&pThread->ProcessUsermodeThreadListElem);
+            pThread->HandleValue = UM_INVALID_HANDLE_VALUE;
+            ThreadCloseHandle(pThread);
+            LockRelease(&pProcess->UsermodeThreadListLock, state);
+
+            return STATUS_SUCCESS;
+        }
+    }
+    LockRelease(&pProcess->UsermodeThreadListLock, state);
+
+    return STATUS_UNSUCCESSFUL;
+}
