@@ -4,6 +4,7 @@
 #include "ref_cnt.h"
 #include "ex_event.h"
 #include "thread.h"
+#include "time.h"
 
 typedef enum _THREAD_STATE
 {
@@ -56,6 +57,16 @@ typedef struct _THREAD
 
     // List of all the threads in the system (including those blocked or dying)
     LIST_ENTRY              AllList;
+
+    LIST_ENTRY              AllListOrderedByCreateTime;
+
+    DATETIME                CreateTime;
+
+    PTHREAD                 ParentThread;
+
+    LOCK                    NoOfDescendentsLock;
+
+    DWORD                   NoOfDescendents;
 
     // List of the threads ready to run
     LIST_ENTRY              ReadyList;

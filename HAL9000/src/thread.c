@@ -9,6 +9,7 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
+#include "os_time.h"
 
 #define TID_INCREMENT               4
 
@@ -36,6 +37,13 @@ typedef struct _THREAD_SYSTEM_DATA
 
     _Guarded_by_(ReadyThreadsLock)
     LIST_ENTRY          ReadyThreadsList;
+
+    //noua lista de thread-uri ordonate dupa createTime
+    LOCK                AllThreadsOrderedByCreateTimeLock;
+
+    _Guarded_by_(AllThreadsOrderedByCreateTimeLock)
+    LIST_ENTRY          AllThreadsOrderedByCreateTimeList;
+
 } THREAD_SYSTEM_DATA, *PTHREAD_SYSTEM_DATA;
 
 static THREAD_SYSTEM_DATA m_threadSystemData;
@@ -145,6 +153,10 @@ ThreadSystemPreinit(
 
     InitializeListHead(&m_threadSystemData.ReadyThreadsList);
     LockInit(&m_threadSystemData.ReadyThreadsLock);
+
+    //initializam head-ul noii liste de thread-uri si lacatul aferent
+    InitializeListHead(&m_threadSystemData.AllThreadsOrderedByCreateTimeList);
+    LockInit(&m_threadSystemData.AllThreadsOrderedByCreateTimeLock);
 }
 
 STATUS
@@ -711,6 +723,44 @@ SetCurrentThread(
     }
 }
 
+//functie pentru inserarea in lista ordonata dupa CreateTime
+static
+INT64
+(__cdecl _TimerCompareFunction) (
+    IN      PLIST_ENTRY     p1,
+    IN      PLIST_ENTRY     p2,
+    IN_OPT  PVOID           Context
+    )
+{
+    ASSERT(NULL != p1);
+    ASSERT(NULL != p2);
+    ASSERT(Context == NULL);
+
+    PTHREAD t1 = CONTAINING_RECORD(p1, THREAD, AllListOrderedByCreateTime);
+    PTHREAD t2 = CONTAINING_RECORD(p2, THREAD, AllListOrderedByCreateTime);
+
+    DATETIME createTime1 = t1->CreateTime;
+    DATETIME createTime2 = t2->CreateTime;
+
+    QWORD c1 =
+        (QWORD)createTime1.Time.Second +
+        (QWORD)createTime1.Time.Minute * 60 +
+        (QWORD)createTime1.Time.Hour * 60 * 60 +
+        (QWORD)createTime1.Date.Day * 60 * 60 * 24 +
+        (QWORD)createTime1.Date.Month * 60 * 60 * 24 * 30 +
+        (QWORD)createTime1.Date.Year * 60 * 60 * 24 * 30 * 12;
+
+    QWORD c2 =
+        (QWORD)createTime2.Time.Second +
+        (QWORD)createTime2.Time.Minute * 60 +
+        (QWORD)createTime2.Time.Hour * 60 * 60 +
+        (QWORD)createTime2.Date.Day * 60 * 60 * 24 +
+        (QWORD)createTime2.Date.Month * 60 * 60 * 24 * 30 +
+        (QWORD)createTime2.Date.Year * 60 * 60 * 24 * 30 * 12;
+
+    return c1<c2;
+}
+
 static
 STATUS
 _ThreadInit(
@@ -737,6 +787,10 @@ _ThreadInit(
     pThread = NULL;
     nameLen = strlen(Name);
     pStack = NULL;
+
+
+    //facem rost de parinte
+    PTHREAD pParent = GetCurrentThread();
 
     __try
     {
@@ -799,6 +853,35 @@ _ThreadInit(
         LockAcquire(&m_threadSystemData.AllThreadsLock, &oldIntrState);
         InsertTailList(&m_threadSystemData.AllThreadsList, &pThread->AllList);
         LockRelease(&m_threadSystemData.AllThreadsLock, oldIntrState);
+        //initializare CreateTime si inserare in noua lista de thread-uri
+        pThread->CreateTime = OsTimeGetCurrentDateTime();
+        LockAcquire(&m_threadSystemData.AllThreadsOrderedByCreateTimeLock, &oldIntrState);
+        InsertOrderedList(&m_threadSystemData.AllThreadsOrderedByCreateTimeList, &pThread->AllListOrderedByCreateTime, _TimerCompareFunction, NULL);
+        LockRelease(&m_threadSystemData.AllThreadsOrderedByCreateTimeLock, oldIntrState);
+
+        //initializam nr de descendenti 
+        INTR_STATE oldIntrState;
+        LockAcquire(&pThread->NoOfDescendentsLock, &oldIntrState);
+        pThread->NoOfDescendents = 0;
+        LockRelease(&pThread->NoOfDescendentsLock, oldIntrState);
+
+        //asignam parintele
+        pThread->ParentThread = pParent;
+
+        INTR_STATE oldIntrState;
+        LOG("As a result of [tid = %d] creation:", pThread->Id);
+        PTHREAD p = pThread;
+        //iteram prin fiecare parinte si incrementam field ul noOfDescendents
+        while (p->ParentThread != NULL) {
+
+            LockAcquire(&p->NoOfDescendentsLock, &oldIntrState);
+            p->NoOfDescendents++;
+            LOG("[tid = %d] now has %d descendents.", p->Id, p->NoOfDescendents);
+            LockRelease(&p->NoOfDescendentsLock, oldIntrState);
+        }
+        LockRelease(&pParent->NoOfDescendentsLock, oldIntrState);
+
+
     }
     __finally
     {
