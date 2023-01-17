@@ -9,6 +9,7 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
+#include "iomu.h"
 
 #define TID_INCREMENT               4
 
@@ -36,6 +37,12 @@ typedef struct _THREAD_SYSTEM_DATA
 
     _Guarded_by_(ReadyThreadsLock)
     LIST_ENTRY          ReadyThreadsList;
+
+    LOCK                AllThreadsByCreatedTimeLock;
+
+    _Guarded_by_(AllThreadsByCreatedTimeLock)
+    LIST_ENTRY          AllThreadsByCreatedTimeListHead;
+
 } THREAD_SYSTEM_DATA, *PTHREAD_SYSTEM_DATA;
 
 static THREAD_SYSTEM_DATA m_threadSystemData;
@@ -145,6 +152,9 @@ ThreadSystemPreinit(
 
     InitializeListHead(&m_threadSystemData.ReadyThreadsList);
     LockInit(&m_threadSystemData.ReadyThreadsLock);
+
+    InitializeListHead(&m_threadSystemData.AllThreadsByCreatedTimeListHead);
+    LockInit(&m_threadSystemData.AllThreadsByCreatedTimeLock);
 }
 
 STATUS
@@ -711,6 +721,28 @@ SetCurrentThread(
     }
 }
 
+
+static
+INT64
+(__cdecl _CreateTimeCompareFunction) (
+    IN      PLIST_ENTRY     p1,
+    IN      PLIST_ENTRY     p2,
+    IN_OPT  PVOID           Context
+    )
+{
+    ASSERT(NULL != p1);
+    ASSERT(NULL != p2);
+    ASSERT(Context == NULL);
+
+    PTHREAD t1 = CONTAINING_RECORD(p1, THREAD, AllListByCreatedTime);
+    PTHREAD t2 = CONTAINING_RECORD(p2, THREAD, AllListByCreatedTime);
+
+    QWORD createTime1 = t1->CreateTime;
+    QWORD createTime2 = t2->CreateTime;
+
+    return createTime1 < createTime2;
+}
+
 static
 STATUS
 _ThreadInit(
@@ -794,11 +826,35 @@ _ThreadInit(
         pThread->State = ThreadStateBlocked;
         pThread->Priority = Priority;
 
+        pThread->CreateTime = IomuGetSystemTimeUs();
+        pThread->NoOfDescendents = 0;
+        if (pThread->Id == 0) {
+
+            pThread->ParentThread = NULL;
+        }
+        else {
+
+            pThread->ParentThread = GetCurrentThread();
+
+            PTHREAD iteratorParentThread = pThread->ParentThread;
+            LOG("As a result of creating [tid = %d]:\n", pThread->Id);
+            while (iteratorParentThread != NULL) {
+
+                iteratorParentThread->NoOfDescendents++;
+                LOG("[tid = %d] now has %d descendents\n", iteratorParentThread->Id, iteratorParentThread->NoOfDescendents);
+                iteratorParentThread = iteratorParentThread->ParentThread;
+            }
+        }
+
         LockInit(&pThread->BlockLock);
 
         LockAcquire(&m_threadSystemData.AllThreadsLock, &oldIntrState);
         InsertTailList(&m_threadSystemData.AllThreadsList, &pThread->AllList);
         LockRelease(&m_threadSystemData.AllThreadsLock, oldIntrState);
+
+        LockAcquire(&m_threadSystemData.AllThreadsByCreatedTimeLock, &oldIntrState);
+        InsertOrderedList(&m_threadSystemData.AllThreadsByCreatedTimeListHead, &pThread->AllListByCreatedTime, _CreateTimeCompareFunction, NULL);
+        LockRelease(&m_threadSystemData.AllThreadsByCreatedTimeLock, oldIntrState);
     }
     __finally
     {
@@ -950,7 +1006,7 @@ _ThreadSetupMainThreadUserStack(
     ASSERT(ResultingStack != NULL);
     ASSERT(Process != NULL);
 
-    *ResultingStack = InitialStack;
+    *ResultingStack = (PVOID)PtrDiff(InitialStack, SHADOW_STACK_SIZE + sizeof(PVOID));
 
     return STATUS_SUCCESS;
 }
@@ -1191,6 +1247,17 @@ _ThreadDestroy(
     RemoveEntryList(&pThread->AllList);
     LockRelease(&m_threadSystemData.AllThreadsLock, oldState);
 
+    LockAcquire(&m_threadSystemData.AllThreadsByCreatedTimeLock, &oldState);
+    RemoveEntryList(&pThread->AllListByCreatedTime);
+    LockRelease(&m_threadSystemData.AllThreadsByCreatedTimeLock, oldState);
+
+    PTHREAD iteratorParentThread = pThread->ParentThread;
+    while (iteratorParentThread != NULL) {
+
+        iteratorParentThread->NoOfDescendents--;
+        iteratorParentThread = iteratorParentThread->ParentThread;
+    }
+
     // This must be done before removing the thread from the process list, else
     // this may be the last thread and the process VAS will be freed by the time
     // ProcessRemoveThreadFromList - this function also dereferences the process
@@ -1239,3 +1306,19 @@ _ThreadKernelFunction(
     ThreadExit(exitStatus);
     NOT_REACHED;
 }
+
+/*PLOCK
+GetAllThreadsByCreatedTimeLock(
+    void
+) {
+
+    return &m_threadSystemData.AllThreadsByCreatedTimeLock;
+}
+
+PLIST_ENTRY
+GetAllThreadsByCreatedTimeListHead(
+    void
+) {
+
+    return &m_threadSystemData.AllThreadsByCreatedTimeListHead;
+}*/

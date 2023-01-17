@@ -7,6 +7,7 @@
 #include "mmu.h"
 #include "process_internal.h"
 #include "dmp_cpu.h"
+#include "thread.h"
 
 extern void SyscallEntry();
 
@@ -68,6 +69,24 @@ SyscallHandler(
             status = SyscallValidateInterface((SYSCALL_IF_VERSION)*pSyscallParameters);
             break;
         // STUDENT TODO: implement the rest of the syscalls
+
+        case SyscallIdThreadExit:
+            status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
+        case SyscallIdProcessExit:
+            status = SyscallProcessExit((STATUS)pSyscallParameters[0]);
+        case SyscallIdFileWrite:
+            status = SyscallFileWrite(
+                (UM_HANDLE)pSyscallParameters[0],
+                (PVOID)pSyscallParameters[1],
+                (QWORD)pSyscallParameters[2],
+                (QWORD*)pSyscallParameters[3]
+                );
+        case SyscallIdGetNumberOfThreadsInInterval:
+            status = SyscallGetNumberOfThreadsInInterval(
+                (QWORD)pSyscallParameters[0],
+                (QWORD)pSyscallParameters[1],
+                (QWORD*)pSyscallParameters[2]
+            );
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -170,3 +189,67 @@ SyscallValidateInterface(
 }
 
 // STUDENT TODO: implement the rest of the syscalls
+
+STATUS
+SyscallThreadExit(
+    IN      STATUS                  ExitStatus
+) {
+
+    ThreadExit(ExitStatus);
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallProcessExit(
+    IN      STATUS                  ExitStatus
+) {
+
+    PPROCESS Process;
+    Process = GetCurrentProcess();
+    Process->TerminationStatus = ExitStatus;
+    ProcessTerminate(Process);
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallFileWrite(
+    IN  UM_HANDLE                   FileHandle,
+    IN_READS_BYTES(BytesToWrite)
+    PVOID                           Buffer,
+    IN  QWORD                       BytesToWrite,
+    OUT QWORD* BytesWritten
+) {
+
+    if (BytesWritten == NULL) {
+
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    STATUS status = MmuIsBufferValid(Buffer, BytesToWrite, PAGE_RIGHTS_READ, GetCurrentProcess());
+    if (!SUCCEEDED(status)) {
+
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if (FileHandle == UM_FILE_HANDLE_STDOUT) {
+
+        LOG("[%s]:[%s]\n", ProcessGetName(NULL), Buffer);
+    }
+
+    *BytesWritten = BytesToWrite;
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallGetNumberOfThreadsInInterval(
+    IN  QWORD                  StartCreateTime,
+    IN  QWORD                  EndCreateTime,
+    OUT QWORD* NoOfThreads
+) {
+
+    UNREFERENCED_PARAMETER(StartCreateTime);
+    UNREFERENCED_PARAMETER(EndCreateTime);
+    UNREFERENCED_PARAMETER(NoOfThreads);
+
+    return STATUS_SUCCESS;
+}

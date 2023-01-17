@@ -119,3 +119,14 @@ THREAD_PRIORITY
 ThreadGetPriority(
     IN_OPT  PTHREAD             Thread
     );
+
+
+/*PLOCK
+GetAllThreadsByCreatedTimeLock(
+    void
+    );
+
+PLIST_ENTRY
+GetAllThreadsByCreatedTimeListHead(
+    void
+    );*/

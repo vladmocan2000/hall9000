@@ -144,7 +144,7 @@ _IsrExceptionHandler(
     }
 
     // no use in logging if we solved the problem
-    if (!exceptionHandled)
+    if (!exceptionHandled && GdtIsSegmentPrivileged(SelectorCS))
     {
         PVOID* pCurrentStackItem;
         DWORD noOfStackElementsToDump;
@@ -172,7 +172,10 @@ _IsrExceptionHandler(
         }
     }
 
-    ASSERT_INFO(exceptionHandled, "Exception 0x%x was not handled\n", InterruptIndex);
+    if (GdtIsSegmentPrivileged(SelectorCS)) {
+
+        ASSERT_INFO(exceptionHandled, "Exception 0x%x was not handled\n", InterruptIndex);
+    }
 }
 
 static

@@ -90,6 +90,15 @@ typedef struct _THREAD
     PVOID                   UserStack;
 
     struct _PROCESS*        Process;
+
+    DWORD                   NoOfDescendents; 
+
+    PTHREAD                 ParentThread;
+
+    LIST_ENTRY              AllListByCreatedTime;
+
+    QWORD                   CreateTime;
+
 } THREAD, *PTHREAD;
 
 //******************************************************************************

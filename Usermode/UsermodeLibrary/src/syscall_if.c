@@ -196,3 +196,14 @@ SyscallFileWrite(
 {
     return SyscallEntry(SyscallIdFileWrite, FileHandle, Buffer, BytesToWrite, BytesWritten);
 }
+
+// SyscallIdFileWrite
+STATUS
+SyscallGetNumberOfThreadsInInterval(
+    IN  QWORD                  StartCreateTime,
+    IN  QWORD                  EndCreateTime,
+    OUT QWORD*                  NoOfThreads
+)
+{
+    return SyscallEntry(SyscallIdFileWrite, StartCreateTime, EndCreateTime, NoOfThreads);
+}
